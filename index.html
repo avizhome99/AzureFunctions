@@ -1,1 +1,75 @@
-<h1>Bore Reading App</h1>
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bore Reading</title>
+  <style>
+    body { font-family: Arial; max-width: 500px; margin: 40px auto; }
+    input, textarea, button { width: 100%; padding: 10px; margin-top: 10px; }
+    button { background: #0078D4; color: white; border: none; }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+
+<h2>Submit Bore Reading</h2>
+<p id="meterDisplay"></p>
+
+<form id="form">
+  <input type="hidden" id="meter">
+
+  <label>Reading</label>
+  <input type="text" id="reading" required>
+
+  <label>Photo (optional)</label>
+  <input type="file" id="photo" accept="image/*" capture="environment">
+
+  <label>Notes</label>
+  <textarea id="notes"></textarea>
+
+  <button type="submit">Submit</button>
+  <p id="message"></p>
+</form>
+
+<script>
+const FUNCTION_URL = "https://bore-reading-api-avi.azurewebsites.net/api/SubmitReading";
+
+const params = new URLSearchParams(window.location.search);
+const meter = params.get("meter");
+
+document.getElementById("meter").value = meter || "";
+document.getElementById("meterDisplay").innerText = meter ? "Meter: " + meter : "Invalid QR link";
+
+document.getElementById("form").addEventListener("submit", async function(e) {
+  e.preventDefault();
+
+  const reading = document.getElementById("reading").value;
+  const notes = document.getElementById("notes").value;
+  const file = document.getElementById("photo").files[0];
+
+  let photo = null;
+
+  if (file) {
+    const reader = new FileReader();
+    photo = await new Promise((resolve) => {
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const response = await fetch(FUNCTION_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meter, reading, notes, photo })
+  });
+
+  const text = await response.text();
+
+  document.getElementById("message").innerText =
+    response.ok ? "Submitted successfully ✅" : text;
+});
+</script>
+
+</body>
+</html>
