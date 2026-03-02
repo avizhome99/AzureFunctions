@@ -4,11 +4,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bore Reading</title>
   <style>
-    body { font-family: Arial; max-width: 500px; margin: 40px auto; }
-    input, textarea, button { width: 100%; padding: 10px; margin-top: 10px; }
-    button { background: #0078D4; color: white; border: none; }
+    body { font-family: Arial; max-width: 520px; margin: 40px auto; padding: 0 12px; }
+    input, textarea, button { width: 100%; padding: 10px; margin-top: 10px; box-sizing: border-box; }
+    button { background: #0078D4; color: white; border: none; cursor: pointer; }
+    button.secondary { background: #444; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .hint { font-size: 12px; color: #666; margin-top: 6px; }
     .success { color: green; }
     .error { color: red; }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
   </style>
 </head>
 <body>
@@ -20,55 +25,156 @@
   <input type="hidden" id="meter">
 
   <label>Reading</label>
-  <input type="text" id="reading" required>
+  <input type="text" id="reading" required placeholder="Enter reading or detect from photo">
 
   <label>Photo (optional)</label>
   <input type="file" id="photo" accept="image/*" capture="environment">
+  <div class="hint">Tip: take photo straight-on, keep digits sharp, avoid glare.</div>
+
+  <div class="row">
+    <button type="button" class="secondary" id="detectBtn">Detect reading from photo</button>
+    <button type="submit" id="submitBtn">Submit</button>
+  </div>
 
   <label>Notes</label>
   <textarea id="notes"></textarea>
 
-  <button type="submit">Submit</button>
   <p id="message"></p>
 </form>
 
 <script>
-const FUNCTION_URL = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api/SubmitReading";
+  // ✅ Set these to your real Function URLs
+  const SUBMIT_URL  = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api/SubmitReading";
+  const EXTRACT_URL = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api/ExtractReading";
 
-const params = new URLSearchParams(window.location.search);
-const meter = params.get("meter");
+  const params = new URLSearchParams(window.location.search);
+  const meter = params.get("meter");
 
-document.getElementById("meter").value = meter || "";
-document.getElementById("meterDisplay").innerText = meter ? "Meter: " + meter : "Invalid QR link";
+  const meterEl = document.getElementById("meter");
+  const meterDisplayEl = document.getElementById("meterDisplay");
+  const readingEl = document.getElementById("reading");
+  const notesEl = document.getElementById("notes");
+  const photoEl = document.getElementById("photo");
+  const msgEl = document.getElementById("message");
+  const detectBtn = document.getElementById("detectBtn");
+  const submitBtn = document.getElementById("submitBtn");
 
-document.getElementById("form").addEventListener("submit", async function(e) {
-  e.preventDefault();
+  meterEl.value = meter || "";
+  meterDisplayEl.innerText = meter ? "Meter: " + meter : "Invalid QR link";
+  if (!meter) {
+    submitBtn.disabled = true;
+    detectBtn.disabled = true;
+    msgEl.className = "error";
+    msgEl.innerText = "Invalid link: missing meter number.";
+  }
 
-  const reading = document.getElementById("reading").value;
-  const notes = document.getElementById("notes").value;
-  const file = document.getElementById("photo").files[0];
+  function setMessage(text, type) {
+    msgEl.className = type || "";
+    msgEl.innerText = text || "";
+  }
 
-  let photo = null;
-
-  if (file) {
+  async function fileToBase64(file) {
     const reader = new FileReader();
-    photo = await new Promise((resolve) => {
-      reader.onload = () => resolve(reader.result.split(",")[1]);
+    return await new Promise((resolve, reject) => {
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        // "data:image/jpeg;base64,XXXX" -> take XXXX
+        const base64 = result.includes(",") ? result.split(",")[1] : result;
+        resolve(base64);
+      };
+      reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   }
 
-  const response = await fetch(FUNCTION_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ meter, reading, notes, photo })
+  // --- OCR / Extract ---
+  detectBtn.addEventListener("click", async () => {
+    try {
+      setMessage("", "");
+      const file = photoEl.files[0];
+      if (!file) {
+        setMessage("Please choose a photo first.", "error");
+        return;
+      }
+
+      detectBtn.disabled = true;
+      detectBtn.innerText = "Detecting…";
+
+      const photoBase64 = await fileToBase64(file);
+
+      const res = await fetch(EXTRACT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo: photoBase64, meter })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = data?.error || data?.message || (await res.text().catch(() => "OCR failed"));
+        throw new Error(err);
+      }
+
+      // Expecting something like: { reading: "00000459", rawText: "...", candidates:[...] }
+      let extracted = String(data.reading || "").trim();
+
+      // Client-side safety: keep digits only (actual “ignore red digits” should be in the Function)
+      extracted = extracted.replace(/[^\d]/g, "");
+
+      if (!extracted) {
+        setMessage("Couldn’t detect the reading. Please type it manually (or try a clearer photo).", "error");
+        return;
+      }
+
+      readingEl.value = extracted;
+      setMessage("Detected ✅ (please double-check before submitting)", "success");
+
+    } catch (e) {
+      setMessage(e.message || "OCR failed. Please try again.", "error");
+    } finally {
+      detectBtn.disabled = false;
+      detectBtn.innerText = "Detect reading from photo";
+    }
   });
 
-  const text = await response.text();
+  // --- Submit ---
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      setMessage("", "");
 
-  document.getElementById("message").innerText =
-    response.ok ? "Submitted successfully ✅" : text;
-});
+      const reading = readingEl.value.trim();
+      const notes = notesEl.value.trim();
+      const file = photoEl.files[0];
+
+      // Optional photo: send base64 if provided (your function currently expects photo required? adjust accordingly)
+      let photo = null;
+      if (file) photo = await fileToBase64(file);
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "Submitting…";
+
+      const response = await fetch(SUBMIT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meter, reading, notes, photo })
+      });
+
+      const text = await response.text();
+      if (!response.ok) throw new Error(text || "Submit failed");
+
+      setMessage("Submitted successfully ✅", "success");
+      // optional: clear fields except meter
+      // readingEl.value = "";
+      // notesEl.value = "";
+      // photoEl.value = "";
+
+    } catch (e) {
+      setMessage(e.message || "Submit failed", "error");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "Submit";
+    }
+  });
 </script>
 
 </body>
