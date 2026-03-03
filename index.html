@@ -28,7 +28,6 @@
     }
     .chiprow { display:flex; gap:10px; margin-top:10px; }
     .chiprow button { width: auto; padding: 10px 12px; border-radius: 10px; }
-    .right { text-align:right; }
     .hidden { display:none; }
   </style>
 </head>
@@ -56,7 +55,7 @@
     <select id="d5"></select>
   </div>
 
-  <!-- Optional: quick adjust buttons -->
+  <!-- quick adjust buttons -->
   <div class="chiprow">
     <button type="button" class="secondary" id="btnMinus1">-1</button>
     <button type="button" class="secondary" id="btnPlus1">+1</button>
@@ -65,7 +64,7 @@
     <button type="button" class="secondary" id="btnUseLast">Use last</button>
   </div>
 
-  <!-- Still keep the plain input for accessibility / fallback (hidden by default) -->
+  <!-- fallback (hidden) -->
   <input type="text" id="readingText" class="hidden" inputmode="numeric" pattern="[0-9]{5}" />
 
   <div class="label">Photo (optional)</div>
@@ -85,13 +84,32 @@
   const params = new URLSearchParams(window.location.search);
   const meter = params.get("meter") || "";
 
-  // store last reading globally so "Use last" works
+  document.getElementById("meter").value = meter;
+  document.getElementById("meterDisplay").innerText = meter ? `Meter: ${meter}` : "Invalid QR link";
+
   let lastReading5 = null;
 
+  const wheelIds = ["d1","d2","d3","d4","d5"];
+
+  function initWheels() {
+    for (const id of wheelIds) {
+      const sel = document.getElementById(id);
+      if (!sel) continue;
+      sel.innerHTML = "";
+      for (let n = 0; n <= 9; n++) {
+        const opt = document.createElement("option");
+        opt.value = String(n);
+        opt.textContent = String(n);
+        sel.appendChild(opt);
+      }
+      sel.value = "0";
+    }
+  }
+
   function setWheelFrom5Digits(five) {
-    const s = (five || "").toString().padStart(5, "0").slice(0, 5);
+    const s = (five || "").toString().replace(/\D/g, "").padStart(5, "0").slice(-5);
     for (let i = 0; i < 5; i++) {
-      const el = document.getElementById(`d${i}`);
+      const el = document.getElementById(wheelIds[i]);
       if (el) el.value = s[i];
     }
   }
@@ -99,69 +117,78 @@
   function getWheelAs5Digits() {
     let s = "";
     for (let i = 0; i < 5; i++) {
-      const el = document.getElementById(`d${i}`);
+      const el = document.getElementById(wheelIds[i]);
       s += (el ? el.value : "0");
     }
-    return s.padStart(5, "0").slice(0, 5);
+    return s.replace(/\D/g, "").padStart(5, "0").slice(-5);
   }
 
-  function renderMeterBox({ ok, last }) {
-    const box = document.getElementById("meterBox");
-    if (!box) return;
+  function setStatus(msg) {
+    document.getElementById("status").innerText = msg || "";
+  }
 
-    if (!meter) {
-      box.innerHTML = `<strong>Invalid QR link</strong>`;
-      return;
-    }
+  function setLastDisplay(text) {
+    document.getElementById("lastDisplay").innerText = text || "";
+  }
 
-    box.innerHTML = `
-      <div><strong>Meter:</strong> ${meter}</div>
-      <div><strong>Last:</strong> ${ok ? last : "Unavailable"}</div>
-    `;
+  function bump(delta) {
+    const cur = parseInt(getWheelAs5Digits(), 10) || 0;
+    let next = cur + delta;
+    if (next < 0) next = 0;
+    if (next > 99999) next = 99999;
+    setWheelFrom5Digits(String(next).padStart(5, "0"));
   }
 
   async function loadLastReading() {
     if (!meter) {
-      renderMeterBox({ ok: false, last: "" });
+      setLastDisplay("");
+      setStatus("Missing meter in QR link.");
       return;
     }
 
     try {
+      setStatus("Loading last reading...");
       const resp = await fetch(`${API_BASE}/GetLatestReading?meter=${encodeURIComponent(meter)}`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
       const data = await resp.json();
 
-      // IMPORTANT: use lastReading5 (not lastReadingRaw)
       lastReading5 = data.lastReading5 || null;
 
-      renderMeterBox({ ok: !!lastReading5, last: lastReading5 || "-----" });
-
-      // Optional: auto-set wheel to last reading
-      if (lastReading5) setWheelFrom5Digits(lastReading5);
-
+      if (lastReading5) {
+        setLastDisplay(`Last: ${lastReading5}`);
+        setWheelFrom5Digits(lastReading5); // auto set
+        setStatus("");
+      } else {
+        setLastDisplay("Last: -----");
+        setStatus("No previous reading found (you can still submit).");
+      }
     } catch (e) {
-      console.error("Failed to load last reading:", e);
+      console.error(e);
       lastReading5 = null;
-      renderMeterBox({ ok: false, last: "" });
+      setLastDisplay("Last: -----");
+      setStatus("Couldn't load last reading (you can still submit).");
     }
   }
 
-  // Hook up Use Last button
-  document.getElementById("useLastBtn")?.addEventListener("click", () => {
-    if (lastReading5) setWheelFrom5Digits(lastReading5);
-  });
-
-  // Call on page load
+  // init
+  initWheels();
   loadLastReading();
 
-  // When you submit, use the wheel digits as your reading
-  document.getElementById("form")?.addEventListener("submit", async (e) => {
+  // buttons
+  document.getElementById("btnUseLast").addEventListener("click", () => {
+    if (lastReading5) setWheelFrom5Digits(lastReading5);
+  });
+  document.getElementById("btnMinus1").addEventListener("click", () => bump(-1));
+  document.getElementById("btnPlus1").addEventListener("click", () => bump(1));
+  document.getElementById("btnPlus10").addEventListener("click", () => bump(10));
+
+  // submit
+  document.getElementById("form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const reading = getWheelAs5Digits();
-    const notes = document.getElementById("notes")?.value || "";
-    const file = document.getElementById("photo")?.files?.[0];
+    const notes = document.getElementById("notes").value || "";
+    const file = document.getElementById("photo").files?.[0];
 
     let photo = null;
     if (file) {
@@ -172,6 +199,7 @@
       });
     }
 
+    setStatus("Submitting...");
     const resp = await fetch(`${API_BASE}/SubmitReading`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -181,8 +209,12 @@
     const text = await resp.text();
     document.getElementById("message").innerText = resp.ok ? "Submitted ✅" : text;
 
-    // refresh last reading after submit
-    if (resp.ok) await loadLastReading();
+    if (resp.ok) {
+      setStatus("");
+      await loadLastReading();
+    } else {
+      setStatus("Submit failed.");
+    }
   });
 </script>
 
