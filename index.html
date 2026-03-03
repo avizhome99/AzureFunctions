@@ -6,8 +6,9 @@
   <style>
     body { font-family: Arial; max-width: 520px; margin: 30px auto; padding: 0 14px; }
     input, textarea, button, select { width: 100%; padding: 12px; margin-top: 10px; box-sizing: border-box; }
-    button { background: #0078D4; color: white; border: none; font-size: 16px; }
+    button { background: #0078D4; color: white; border: none; font-size: 16px; cursor: pointer; }
     button.secondary { background: #444; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     .row { display: flex; gap: 10px; }
     .row > * { flex: 1; }
     .small { font-size: 12px; color: #666; margin-top: 6px; }
@@ -26,9 +27,31 @@
       padding: 10px;
       border-radius: 10px;
     }
-    .chiprow { display:flex; gap:10px; margin-top:10px; }
+    .chiprow { display:flex; gap:10px; margin-top:10px; align-items: center; }
     .chiprow button { width: auto; padding: 10px 12px; border-radius: 10px; }
     .hidden { display:none; }
+
+    /* Override section */
+    .overrideBox {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      background: #fff;
+    }
+    .overrideRow {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .overrideRow input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      transform: scale(1.2);
+    }
+    .overrideHint { font-size: 12px; color: #666; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -48,14 +71,14 @@
 
   <!-- 5-digit wheel UI -->
   <div class="wheels" aria-label="5 digit reading selector">
+    <select id="d0"></select>
     <select id="d1"></select>
     <select id="d2"></select>
     <select id="d3"></select>
     <select id="d4"></select>
-    <select id="d5"></select>
   </div>
 
-  <!-- quick adjust buttons -->
+  <!-- Quick adjust buttons -->
   <div class="chiprow">
     <button type="button" class="secondary" id="btnMinus1">-1</button>
     <button type="button" class="secondary" id="btnPlus1">+1</button>
@@ -64,15 +87,25 @@
     <button type="button" class="secondary" id="btnUseLast">Use last</button>
   </div>
 
-  <!-- fallback (hidden) -->
-  <input type="text" id="readingText" class="hidden" inputmode="numeric" pattern="[0-9]{5}" />
+  <!-- Override option -->
+  <div class="overrideBox">
+    <div class="overrideRow">
+      <input type="checkbox" id="overrideLower">
+      <label for="overrideLower" style="margin:0; width:auto;">
+        Allow lower reading (meter reset/replaced)
+      </label>
+    </div>
+    <div class="overrideHint">
+      If you tick this, you must add a note explaining why the reading is lower.
+    </div>
+  </div>
 
   <div class="label">Photo (optional)</div>
   <input type="file" id="photo" accept="image/*" capture="environment">
   <div class="small">Tip: take photo straight-on, keep digits sharp, avoid glare.</div>
 
   <div class="label">Notes</div>
-  <textarea id="notes" rows="3"></textarea>
+  <textarea id="notes" rows="3" placeholder="Optional, but required if overriding a lower reading"></textarea>
 
   <button type="submit" id="submitBtn">Submit</button>
   <p id="message"></p>
@@ -82,113 +115,207 @@
   const API_BASE = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api";
 
   const params = new URLSearchParams(window.location.search);
-  const meter = params.get("meter") || "";
-
-  document.getElementById("meter").value = meter;
-  document.getElementById("meterDisplay").innerText = meter ? `Meter: ${meter}` : "Invalid QR link";
+  const meter = (params.get("meter") || "").trim();
 
   let lastReading5 = null;
 
-  const wheelIds = ["d1","d2","d3","d4","d5"];
-
-  function initWheels() {
-    for (const id of wheelIds) {
-      const sel = document.getElementById(id);
-      if (!sel) continue;
-      sel.innerHTML = "";
-      for (let n = 0; n <= 9; n++) {
-        const opt = document.createElement("option");
-        opt.value = String(n);
-        opt.textContent = String(n);
-        sel.appendChild(opt);
-      }
-      sel.value = "0";
-    }
+  // --- UI helpers ---
+  function setStatus(text, type) {
+    const el = document.getElementById("status");
+    el.className = "small " + (type || "");
+    el.innerText = text || "";
   }
 
-  function setWheelFrom5Digits(five) {
-    const s = (five || "").toString().replace(/\D/g, "").padStart(5, "0").slice(-5);
-    for (let i = 0; i < 5; i++) {
-      const el = document.getElementById(wheelIds[i]);
-      if (el) el.value = s[i];
-    }
+  function setMessage(text, type) {
+    const el = document.getElementById("message");
+    el.className = type || "";
+    el.innerText = text || "";
+  }
+
+  function pad5(val) {
+    const digits = String(val || "").replace(/\D/g, "");
+    return digits.padStart(5, "0").slice(-5);
   }
 
   function getWheelAs5Digits() {
     let s = "";
     for (let i = 0; i < 5; i++) {
-      const el = document.getElementById(wheelIds[i]);
+      const el = document.getElementById(`d${i}`);
       s += (el ? el.value : "0");
     }
-    return s.replace(/\D/g, "").padStart(5, "0").slice(-5);
+    return pad5(s);
   }
 
-  function setStatus(msg) {
-    document.getElementById("status").innerText = msg || "";
+  function setWheelFrom5Digits(five) {
+    const s = pad5(five);
+    for (let i = 0; i < 5; i++) {
+      const el = document.getElementById(`d${i}`);
+      if (el) el.value = s[i];
+    }
+    validateAndUpdateUI();
   }
 
-  function setLastDisplay(text) {
-    document.getElementById("lastDisplay").innerText = text || "";
+  function toInt5(five) {
+    return parseInt(pad5(five), 10);
   }
 
-  function bump(delta) {
-    const cur = parseInt(getWheelAs5Digits(), 10) || 0;
+  // Create digit options 0-9 for each wheel
+  function initWheels() {
+    for (let i = 0; i < 5; i++) {
+      const sel = document.getElementById(`d${i}`);
+      sel.innerHTML = "";
+      for (let d = 0; d <= 9; d++) {
+        const opt = document.createElement("option");
+        opt.value = String(d);
+        opt.textContent = String(d);
+        sel.appendChild(opt);
+      }
+      sel.value = "0";
+      sel.addEventListener("change", () => {
+        validateAndUpdateUI();
+        // optional: auto-correct if they go below and no override is ticked
+        autoCorrectIfBelowLast();
+      });
+    }
+  }
+
+  function renderHeader() {
+    document.getElementById("meter").value = meter || "";
+    document.getElementById("meterDisplay").innerText = meter ? `Meter: ${meter}` : "Invalid QR link";
+    document.getElementById("lastDisplay").innerText = lastReading5 ? `Last: ${lastReading5}` : "Last: (not available)";
+  }
+
+  async function loadLastReading() {
+    if (!meter) {
+      lastReading5 = null;
+      renderHeader();
+      setStatus("Invalid QR link (missing ?meter=...)", "error");
+      document.getElementById("submitBtn").disabled = true;
+      return;
+    }
+
+    setStatus("Loading last reading…");
+    try {
+      const resp = await fetch(`${API_BASE}/GetLatestReading?meter=${encodeURIComponent(meter)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const data = await resp.json();
+      lastReading5 = data.lastReading5 ? pad5(data.lastReading5) : null;
+
+      renderHeader();
+
+      if (lastReading5) {
+        setStatus("Ready.");
+        // set wheel to last by default
+        setWheelFrom5Digits(lastReading5);
+      } else {
+        setStatus("No previous reading found. Enter a reading.");
+        validateAndUpdateUI();
+      }
+    } catch (e) {
+      console.error(e);
+      lastReading5 = null;
+      renderHeader();
+      setStatus("Couldn’t load last reading (you can still submit).", "error");
+      validateAndUpdateUI();
+    }
+  }
+
+  // --- Validation / UX rules ---
+  function isLowerThanLast(new5) {
+    if (!lastReading5) return false;
+    return toInt5(new5) < toInt5(lastReading5);
+  }
+
+  function validateAndUpdateUI() {
+    const new5 = getWheelAs5Digits();
+    const override = document.getElementById("overrideLower").checked;
+    const notes = (document.getElementById("notes").value || "").trim();
+    const submitBtn = document.getElementById("submitBtn");
+
+    // Default enable unless we find a blocking condition
+    let canSubmit = true;
+    let msg = "";
+    let msgType = "";
+
+    if (!meter) {
+      canSubmit = false;
+      msg = "Invalid QR link (missing meter).";
+      msgType = "error";
+    }
+
+    if (canSubmit && lastReading5 && isLowerThanLast(new5) && !override) {
+      canSubmit = false;
+      msg = `Reading can’t be less than the previous reading (${lastReading5}).`;
+      msgType = "error";
+    }
+
+    if (canSubmit && lastReading5 && isLowerThanLast(new5) && override) {
+      // Require notes for override
+      if (!notes) {
+        canSubmit = false;
+        msg = "Please add a note explaining why the reading is lower (override is ticked).";
+        msgType = "error";
+      } else {
+        msg = "Override enabled: lower reading allowed (note provided).";
+        msgType = "success";
+      }
+    }
+
+    submitBtn.disabled = !canSubmit;
+    setMessage(msg, msgType);
+  }
+
+  function autoCorrectIfBelowLast() {
+    const override = document.getElementById("overrideLower").checked;
+    if (!lastReading5 || override) return;
+
+    const new5 = getWheelAs5Digits();
+    if (isLowerThanLast(new5)) {
+      // snap back to last value (prevents accidental lower values)
+      setWheelFrom5Digits(lastReading5);
+      setMessage(`Adjusted back to last reading (${lastReading5}) to prevent going backwards.`, "error");
+    }
+  }
+
+  function adjustBy(delta) {
+    const cur = toInt5(getWheelAs5Digits());
     let next = cur + delta;
     if (next < 0) next = 0;
     if (next > 99999) next = 99999;
     setWheelFrom5Digits(String(next).padStart(5, "0"));
   }
 
-  async function loadLastReading() {
-    if (!meter) {
-      setLastDisplay("");
-      setStatus("Missing meter in QR link.");
-      return;
-    }
-
-    try {
-      setStatus("Loading last reading...");
-      const resp = await fetch(`${API_BASE}/GetLatestReading?meter=${encodeURIComponent(meter)}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-
-      lastReading5 = data.lastReading5 || null;
-
-      if (lastReading5) {
-        setLastDisplay(`Last: ${lastReading5}`);
-        setWheelFrom5Digits(lastReading5); // auto set
-        setStatus("");
-      } else {
-        setLastDisplay("Last: -----");
-        setStatus("No previous reading found (you can still submit).");
-      }
-    } catch (e) {
-      console.error(e);
-      lastReading5 = null;
-      setLastDisplay("Last: -----");
-      setStatus("Couldn't load last reading (you can still submit).");
-    }
-  }
-
-  // init
+  // --- Wire up buttons / inputs ---
   initWheels();
-  loadLastReading();
 
-  // buttons
   document.getElementById("btnUseLast").addEventListener("click", () => {
     if (lastReading5) setWheelFrom5Digits(lastReading5);
   });
-  document.getElementById("btnMinus1").addEventListener("click", () => bump(-1));
-  document.getElementById("btnPlus1").addEventListener("click", () => bump(1));
-  document.getElementById("btnPlus10").addEventListener("click", () => bump(10));
 
-  // submit
+  document.getElementById("btnMinus1").addEventListener("click", () => adjustBy(-1));
+  document.getElementById("btnPlus1").addEventListener("click", () => adjustBy(1));
+  document.getElementById("btnPlus10").addEventListener("click", () => adjustBy(10));
+
+  document.getElementById("overrideLower").addEventListener("change", () => {
+    validateAndUpdateUI();
+    // if they untick override and current is below last, snap back
+    autoCorrectIfBelowLast();
+  });
+
+  document.getElementById("notes").addEventListener("input", () => validateAndUpdateUI());
+
+  // --- Submit ---
   document.getElementById("form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    // final validation gate
+    validateAndUpdateUI();
+    if (document.getElementById("submitBtn").disabled) return;
+
     const reading = getWheelAs5Digits();
     const notes = document.getElementById("notes").value || "";
-    const file = document.getElementById("photo").files?.[0];
+    const file = document.getElementById("photo").files[0];
 
     let photo = null;
     if (file) {
@@ -199,7 +326,9 @@
       });
     }
 
-    setStatus("Submitting...");
+    setStatus("Submitting…");
+    setMessage("");
+
     const resp = await fetch(`${API_BASE}/SubmitReading`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -207,15 +336,21 @@
     });
 
     const text = await resp.text();
-    document.getElementById("message").innerText = resp.ok ? "Submitted ✅" : text;
 
     if (resp.ok) {
-      setStatus("");
+      setStatus("Submitted ✅", "success");
+      setMessage("Submitted ✅", "success");
+      // reload last reading + reset override
+      document.getElementById("overrideLower").checked = false;
       await loadLastReading();
     } else {
-      setStatus("Submit failed.");
+      setStatus("Submit failed.", "error");
+      setMessage(text || "Submit failed.", "error");
     }
   });
+
+  // --- Start ---
+  loadLastReading();
 </script>
 
 </body>
