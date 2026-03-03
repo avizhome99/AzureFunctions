@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mayville Estate – Admin Dashboard</title>
+  <style>
+    :root{--bg:#f6f7fb;--card:#fff;--text:#0f172a;--muted:#64748b;--border:#e5e7eb;--brand:#0b63ce;--shadow:0 10px 26px rgba(2,6,23,.08);--r:16px;}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);padding:18px 14px 40px}
+    .wrap{max-width:980px;margin:0 auto}
+    .hero{background:linear-gradient(135deg,var(--brand),#094fa5);color:#fff;border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+    .hero h1{margin:0;font-size:18px;font-weight:900}
+    .hero p{margin:6px 0 0;opacity:.9;font-size:13px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:14px;margin-top:12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    input,select,button{padding:10px 12px;border-radius:12px;border:1px solid var(--border);font-weight:700}
+    button{background:var(--brand);color:#fff;border:none;cursor:pointer}
+    button.secondary{background:#0b12201a;color:var(--text);border:1px solid var(--border)}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:10px;border-bottom:1px solid var(--border);font-size:13px;text-align:left}
+    th{color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.6px;font-size:11px}
+    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#0b12201a;font-weight:800}
+    canvas{width:100% !important;max-height:340px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Mayville Estate – Admin Dashboard</h1>
+      <p>Totals per meter, deltas since last reading, and monthly usage.</p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input id="pin" type="password" placeholder="Admin PIN" style="min-width:180px">
+        <button id="btnLoad">Load dashboard</button>
+        <button id="btnLogout" class="secondary">Logout</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <select id="meterSelect" style="min-width:220px"></select>
+        <button id="btnLoadChart" class="secondary">Load monthly chart</button>
+        <span class="muted">Usage = (max − min) per month</span>
+      </div>
+      <div style="margin-top:10px">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <span class="pill" id="kpiMeters">Meters: —</span>
+        <span class="pill" id="kpiGenerated">Updated: —</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Meter</th>
+            <th>Lot</th>
+            <th>Resident</th>
+            <th>Latest</th>
+            <th>Delta</th>
+            <th>Total</th>
+            <th>Latest date</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const API_BASE = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api";
+    const pinEl = document.getElementById("pin");
+    const statusEl = document.getElementById("status");
+    const meterSelect = document.getElementById("meterSelect");
+    const tbody = document.getElementById("tbody");
+
+    // remember pin locally (optional)
+    pinEl.value = localStorage.getItem("mayville_admin_pin") || "";
+
+    function setStatus(s){ statusEl.textContent = s || ""; }
+
+    function hdrs(){
+      const pin = (pinEl.value || "").trim();
+      return { "Content-Type":"application/json", "X-Admin-Pin": pin };
+    }
+
+    function fmtDelta(d){
+      if (d === null || d === undefined) return "—";
+      const sign = d >= 0 ? "+" : "";
+      return sign + d;
+    }
+
+    function esc(s){ return String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+    let chart;
+    function renderChart(labels, values){
+      const ctx = document.getElementById("chart");
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: "bar",
+        data: { labels, datasets: [{ label: "Monthly usage", data: values }] },
+        options: { responsive:true, maintainAspectRatio:false }
+      });
+    }
+
+    async function loadDashboard(){
+      const pin = (pinEl.value || "").trim();
+      if (!pin){ setStatus("Enter admin PIN."); return; }
+      localStorage.setItem("mayville_admin_pin", pin);
+
+      setStatus("Loading…");
+      tbody.innerHTML = "";
+
+      const resp = await fetch(`${API_BASE}/GetDashboardSummary`, { headers: hdrs() });
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok){
+        setStatus(`Error: ${resp.status}`);
+        alert(json?.message || JSON.stringify(json) || "Failed");
+        return;
+      }
+
+      document.getElementById("kpiMeters").textContent = `Meters: ${json.meterCount}`;
+      document.getElementById("kpiGenerated").textContent = `Updated: ${new Date(json.generatedAt).toLocaleString()}`;
+
+      // fill table
+      const rows = json.rows || [];
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${esc(r.meter)}</td>
+          <td>${esc(r.lotNumber || "")}</td>
+          <td>${esc(r.residentName || "")}</td>
+          <td><b>${esc(r.latestReading || "—")}</b></td>
+          <td>${fmtDelta(r.deltaSinceLast)}</td>
+          <td>${r.totalSinceFirst ?? "—"}</td>
+          <td>${r.latestAt ? esc(new Date(r.latestAt).toLocaleString()) : "—"}</td>
+        </tr>
+      `).join("");
+
+      // fill meter dropdown
+      meterSelect.innerHTML = rows.map(r => `<option value="${esc(r.meter)}">${esc(r.meter)} – ${esc(r.residentName || "Unknown")}</option>`).join("");
+
+      // auto load first chart
+      if (rows.length){
+        await loadMonthlyChart(rows[0].meter);
+      }
+
+      setStatus("Loaded ✅");
+    }
+
+    async function loadMonthlyChart(meter){
+      if (!meter) return;
+      setStatus("Loading chart…");
+
+      const resp = await fetch(`${API_BASE}/GetMonthlyUsage?meter=${encodeURIComponent(meter)}`, { headers: hdrs() });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok){
+        setStatus(`Chart error: ${resp.status}`);
+        alert(json?.message || JSON.stringify(json) || "Failed");
+        return;
+      }
+
+      const series = json.series || [];
+      const labels = series.map(x => x.month);
+      const values = series.map(x => x.usage);
+
+      renderChart(labels, values);
+      setStatus("Chart loaded ✅");
+    }
+
+    document.getElementById("btnLoad").addEventListener("click", loadDashboard);
+    document.getElementById("btnLoadChart").addEventListener("click", () => loadMonthlyChart(meterSelect.value));
+    document.getElementById("btnLogout").addEventListener("click", () => {
+      localStorage.removeItem("mayville_admin_pin");
+      pinEl.value = "";
+      tbody.innerHTML = "";
+      meterSelect.innerHTML = "";
+      setStatus("Logged out.");
+      if (chart) chart.destroy();
+      document.getElementById("kpiMeters").textContent = "Meters: —";
+      document.getElementById("kpiGenerated").textContent = "Updated: —";
+    });
+  </script>
+</body>
+</html>
