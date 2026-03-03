@@ -2,114 +2,337 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bore Reading</title>
+  <title>Mayville Estate – Bore Reading</title>
   <style>
-    body { font-family: Arial; max-width: 520px; margin: 30px auto; padding: 0 14px; }
-    input, textarea, button, select { width: 100%; padding: 12px; margin-top: 10px; box-sizing: border-box; }
-    button { background: #0078D4; color: white; border: none; font-size: 16px; cursor: pointer; }
-    button.secondary { background: #444; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .row { display: flex; gap: 10px; }
-    .row > * { flex: 1; }
-    .small { font-size: 12px; color: #666; margin-top: 6px; }
-    .success { color: green; }
-    .error { color: #b00020; }
-    .box { background: #f6f6f6; padding: 12px; border-radius: 8px; margin-top: 10px; }
-    .label { margin-top: 14px; font-weight: 600; }
-    .meter { font-size: 18px; font-weight: 700; }
-    .muted { color: #555; }
-    .wheels { display: flex; gap: 8px; margin-top: 10px; }
-    .wheels select {
-      flex: 1;
-      text-align: center;
-      font-size: 20px;
-      height: 56px;
-      padding: 10px;
-      border-radius: 10px;
+    :root{
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e5e7eb;
+      --brand:#0b63ce;
+      --brand2:#094fa5;
+      --danger:#b00020;
+      --success:#0a7a3d;
+      --shadow: 0 10px 26px rgba(2,6,23,.08);
+      --radius: 16px;
     }
-    .chiprow { display:flex; gap:10px; margin-top:10px; align-items: center; }
-    .chiprow button { width: auto; padding: 10px 12px; border-radius: 10px; }
-    .hidden { display:none; }
 
-    /* Override section */
-    .overrideBox {
-      margin-top: 12px;
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 22px 14px 40px;
+    }
+
+    .wrap{max-width: 640px; margin: 0 auto;}
+    .hero{
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      color:#fff;
+      border-radius: var(--radius);
+      padding: 18px 18px;
+      box-shadow: var(--shadow);
+    }
+    .heroTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .brand h1{
+      margin:0;
+      font-size:18px;
+      letter-spacing:.2px;
+      font-weight: 800;
+    }
+    .brand p{
+      margin:0;
+      opacity:.9;
+      font-size: 12.5px;
+    }
+    .badge{
+      background: rgba(255,255,255,.16);
+      border:1px solid rgba(255,255,255,.22);
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .card{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-top: 14px;
+    }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media(min-width:560px){
+      .grid2{grid-template-columns: 1fr 1fr;}
+    }
+
+    .kpi{
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fbfbfd;
+    }
+    .kpi .label{
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    .kpi .value{
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: .3px;
+    }
+
+    .subhead{
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .2px;
+    }
+    .help{
+      color: var(--muted);
+      font-size: 12.5px;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .wheels{
+      display:flex;
+      gap:10px;
+      margin-top: 10px;
+    }
+    .wheels select{
+      flex:1;
+      height: 58px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      font-size: 20px;
+      font-weight: 800;
+      text-align: center;
       padding: 10px;
-      border-radius: 10px;
-      border: 1px solid #ddd;
+      box-shadow: 0 4px 10px rgba(2,6,23,.06);
+    }
+
+    .chiprow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button{
+      border: none;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-weight: 800;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform .04s ease, opacity .15s ease;
+    }
+    button:active{transform: translateY(1px)}
+    button:disabled{opacity:.55; cursor:not-allowed}
+
+    .btnPrimary{
+      width: 100%;
+      background: var(--brand);
+      color:#fff;
+      padding: 14px 16px;
+      font-size: 16px;
+      border-radius: 14px;
+      box-shadow: 0 10px 18px rgba(11,99,206,.20);
+    }
+    .btnGhost{
+      background:#0b12201a;
+      color: var(--text);
+    }
+    .btnOutline{
+      background:#fff;
+      border:1px solid var(--border);
+      color: var(--text);
+    }
+
+    input[type="file"], textarea{
+      width:100%;
+      margin-top: 10px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 12px;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    .rowSplit{
+      display:flex;
+      gap:10px;
+      margin-top:10px;
+      align-items:center;
+      justify-content: space-between;
+    }
+
+    .overrideBox{
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
       background: #fff;
     }
-    .overrideRow {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-top: 8px;
+    .overrideRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
     }
-    .overrideRow input[type="checkbox"] {
-      width: auto;
-      margin: 0;
-      padding: 0;
+    .overrideRow input[type="checkbox"]{
+      width:auto;
+      margin:0;
       transform: scale(1.2);
+      accent-color: var(--brand);
     }
-    .overrideHint { font-size: 12px; color: #666; margin-top: 6px; }
+    .divider{
+      height:1px;
+      background: var(--border);
+      margin: 14px 0;
+    }
+
+    .status{
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .msg{
+      margin-top: 10px;
+      font-size: 13px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #fbfbfd;
+      color: var(--text);
+      display:none;
+    }
+    .msg.error{
+      display:block;
+      border-color: rgba(176,0,32,.25);
+      background: rgba(176,0,32,.06);
+      color: var(--danger);
+      font-weight: 700;
+    }
+    .msg.success{
+      display:block;
+      border-color: rgba(10,122,61,.25);
+      background: rgba(10,122,61,.06);
+      color: var(--success);
+      font-weight: 700;
+    }
+
+    .footer{
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align:center;
+    }
+    .footer b{color: var(--text)}
   </style>
 </head>
 <body>
-
-<h2>Submit Bore Reading</h2>
-
-<div class="box">
-  <div id="meterDisplay" class="meter"></div>
-  <div id="lastDisplay" class="muted"></div>
-  <div id="status" class="small"></div>
-</div>
-
-<form id="form">
-  <input type="hidden" id="meter">
-
-  <div class="label">Reading (5 digits)</div>
-
-  <!-- 5-digit wheel UI -->
-  <div class="wheels" aria-label="5 digit reading selector">
-    <select id="d0"></select>
-    <select id="d1"></select>
-    <select id="d2"></select>
-    <select id="d3"></select>
-    <select id="d4"></select>
-  </div>
-
-  <!-- Quick adjust buttons -->
-  <div class="chiprow">
-    <button type="button" class="secondary" id="btnMinus1">-1</button>
-    <button type="button" class="secondary" id="btnPlus1">+1</button>
-    <button type="button" class="secondary" id="btnPlus10">+10</button>
-    <div style="flex:1"></div>
-    <button type="button" class="secondary" id="btnUseLast">Use last</button>
-  </div>
-
-  <!-- Override option -->
-  <div class="overrideBox">
-    <div class="overrideRow">
-      <input type="checkbox" id="overrideLower">
-      <label for="overrideLower" style="margin:0; width:auto;">
-        Allow lower reading (meter reset/replaced)
-      </label>
+  <div class="wrap">
+    <div class="hero">
+      <div class="heroTop">
+        <div class="brand">
+          <h1>Mayville Estate</h1>
+          <p>Communal bore reading submission</p>
+        </div>
+        <div class="badge">Bore Portal</div>
+      </div>
     </div>
-    <div class="overrideHint">
-      If you tick this, you must add a note explaining why the reading is lower.
+
+    <div class="card">
+      <div class="grid2">
+        <div class="kpi">
+          <div class="label">Meter</div>
+          <div id="meterDisplay" class="value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Last reading</div>
+          <div id="lastDisplay" class="value">—</div>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="card">
+      <div class="subhead">New reading</div>
+      <div class="help">Select the 5 digits shown in the blue window on the meter.</div>
+
+      <form id="form">
+        <input type="hidden" id="meter">
+
+        <div class="wheels" aria-label="5 digit reading selector">
+          <select id="d0"></select>
+          <select id="d1"></select>
+          <select id="d2"></select>
+          <select id="d3"></select>
+          <select id="d4"></select>
+        </div>
+
+        <div class="chiprow">
+          <button type="button" class="btnGhost" id="btnMinus1">-1</button>
+          <button type="button" class="btnGhost" id="btnPlus1">+1</button>
+          <button type="button" class="btnGhost" id="btnPlus10">+10</button>
+          <div style="flex:1"></div>
+          <button type="button" class="btnOutline" id="btnUseLast">Use last</button>
+        </div>
+
+        <div class="overrideBox">
+          <div class="overrideRow">
+            <input type="checkbox" id="overrideLower">
+            <label for="overrideLower" style="margin:0; font-weight:800;">Allow lower reading</label>
+          </div>
+          <div class="help">Only use this if the meter was reset/replaced. A note is required.</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="subhead">Optional photo</div>
+        <div class="help">If possible: take the photo straight-on, keep digits sharp, avoid glare.</div>
+        <input type="file" id="photo" accept="image/*" capture="environment">
+
+        <div class="subhead" style="margin-top:14px;">Notes</div>
+        <textarea id="notes" rows="3" placeholder="Optional (required if allowing a lower reading)"></textarea>
+
+        <button type="submit" id="submitBtn" class="btnPrimary">Submit reading</button>
+
+        <div id="message" class="msg"></div>
+      </form>
+    </div>
+
+    <div class="footer">
+      <b>Mayville Estate</b> • Thank you for keeping our bore records up to date.
     </div>
   </div>
-
-  <div class="label">Photo (optional)</div>
-  <input type="file" id="photo" accept="image/*" capture="environment">
-  <div class="small">Tip: take photo straight-on, keep digits sharp, avoid glare.</div>
-
-  <div class="label">Notes</div>
-  <textarea id="notes" rows="3" placeholder="Optional, but required if overriding a lower reading"></textarea>
-
-  <button type="submit" id="submitBtn">Submit</button>
-  <p id="message"></p>
-</form>
 
 <script>
   const API_BASE = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api";
@@ -119,22 +342,30 @@
 
   let lastReading5 = null;
 
-  // --- UI helpers ---
-  function setStatus(text, type) {
-    const el = document.getElementById("status");
-    el.className = "small " + (type || "");
-    el.innerText = text || "";
+  function setStatus(text) {
+    document.getElementById("status").innerText = text || "";
   }
 
-  function setMessage(text, type) {
+  function showMessage(text, type) {
     const el = document.getElementById("message");
-    el.className = type || "";
-    el.innerText = text || "";
+    if (!text) {
+      el.style.display = "none";
+      el.className = "msg";
+      el.innerText = "";
+      return;
+    }
+    el.style.display = "block";
+    el.className = "msg " + (type || "");
+    el.innerText = text;
   }
 
   function pad5(val) {
     const digits = String(val || "").replace(/\D/g, "");
     return digits.padStart(5, "0").slice(-5);
+  }
+
+  function toInt5(five) {
+    return parseInt(pad5(five), 10);
   }
 
   function getWheelAs5Digits() {
@@ -155,11 +386,6 @@
     validateAndUpdateUI();
   }
 
-  function toInt5(five) {
-    return parseInt(pad5(five), 10);
-  }
-
-  // Create digit options 0-9 for each wheel
   function initWheels() {
     for (let i = 0; i < 5; i++) {
       const sel = document.getElementById(`d${i}`);
@@ -173,7 +399,6 @@
       sel.value = "0";
       sel.addEventListener("change", () => {
         validateAndUpdateUI();
-        // optional: auto-correct if they go below and no override is ticked
         autoCorrectIfBelowLast();
       });
     }
@@ -181,20 +406,23 @@
 
   function renderHeader() {
     document.getElementById("meter").value = meter || "";
-    document.getElementById("meterDisplay").innerText = meter ? `Meter: ${meter}` : "Invalid QR link";
-    document.getElementById("lastDisplay").innerText = lastReading5 ? `Last: ${lastReading5}` : "Last: (not available)";
+    document.getElementById("meterDisplay").innerText = meter ? meter : "Invalid QR link";
+    document.getElementById("lastDisplay").innerText = lastReading5 ? lastReading5 : "—";
   }
 
   async function loadLastReading() {
     if (!meter) {
       lastReading5 = null;
       renderHeader();
-      setStatus("Invalid QR link (missing ?meter=...)", "error");
+      setStatus("Invalid QR link (missing ?meter=...)");
       document.getElementById("submitBtn").disabled = true;
+      showMessage("Invalid QR link (missing meter).", "error");
       return;
     }
 
     setStatus("Loading last reading…");
+    showMessage("");
+
     try {
       const resp = await fetch(`${API_BASE}/GetLatestReading?meter=${encodeURIComponent(meter)}`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -206,8 +434,7 @@
 
       if (lastReading5) {
         setStatus("Ready.");
-        // set wheel to last by default
-        setWheelFrom5Digits(lastReading5);
+        setWheelFrom5Digits(lastReading5); // default to last
       } else {
         setStatus("No previous reading found. Enter a reading.");
         validateAndUpdateUI();
@@ -216,12 +443,11 @@
       console.error(e);
       lastReading5 = null;
       renderHeader();
-      setStatus("Couldn’t load last reading (you can still submit).", "error");
+      setStatus("Couldn’t load last reading (you can still submit).");
       validateAndUpdateUI();
     }
   }
 
-  // --- Validation / UX rules ---
   function isLowerThanLast(new5) {
     if (!lastReading5) return false;
     return toInt5(new5) < toInt5(lastReading5);
@@ -233,37 +459,35 @@
     const notes = (document.getElementById("notes").value || "").trim();
     const submitBtn = document.getElementById("submitBtn");
 
-    // Default enable unless we find a blocking condition
     let canSubmit = true;
     let msg = "";
-    let msgType = "";
+    let type = "";
 
     if (!meter) {
       canSubmit = false;
       msg = "Invalid QR link (missing meter).";
-      msgType = "error";
+      type = "error";
     }
 
     if (canSubmit && lastReading5 && isLowerThanLast(new5) && !override) {
       canSubmit = false;
       msg = `Reading can’t be less than the previous reading (${lastReading5}).`;
-      msgType = "error";
+      type = "error";
     }
 
     if (canSubmit && lastReading5 && isLowerThanLast(new5) && override) {
-      // Require notes for override
       if (!notes) {
         canSubmit = false;
         msg = "Please add a note explaining why the reading is lower (override is ticked).";
-        msgType = "error";
+        type = "error";
       } else {
         msg = "Override enabled: lower reading allowed (note provided).";
-        msgType = "success";
+        type = "success";
       }
     }
 
     submitBtn.disabled = !canSubmit;
-    setMessage(msg, msgType);
+    showMessage(msg, type);
   }
 
   function autoCorrectIfBelowLast() {
@@ -272,9 +496,8 @@
 
     const new5 = getWheelAs5Digits();
     if (isLowerThanLast(new5)) {
-      // snap back to last value (prevents accidental lower values)
       setWheelFrom5Digits(lastReading5);
-      setMessage(`Adjusted back to last reading (${lastReading5}) to prevent going backwards.`, "error");
+      showMessage(`Adjusted back to last reading (${lastReading5}) to prevent going backwards.`, "error");
     }
   }
 
@@ -286,7 +509,7 @@
     setWheelFrom5Digits(String(next).padStart(5, "0"));
   }
 
-  // --- Wire up buttons / inputs ---
+  // Events
   initWheels();
 
   document.getElementById("btnUseLast").addEventListener("click", () => {
@@ -299,17 +522,14 @@
 
   document.getElementById("overrideLower").addEventListener("change", () => {
     validateAndUpdateUI();
-    // if they untick override and current is below last, snap back
     autoCorrectIfBelowLast();
   });
 
   document.getElementById("notes").addEventListener("input", () => validateAndUpdateUI());
 
-  // --- Submit ---
   document.getElementById("form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    // final validation gate
     validateAndUpdateUI();
     if (document.getElementById("submitBtn").disabled) return;
 
@@ -327,7 +547,7 @@
     }
 
     setStatus("Submitting…");
-    setMessage("");
+    showMessage("");
 
     const resp = await fetch(`${API_BASE}/SubmitReading`, {
       method: "POST",
@@ -338,18 +558,17 @@
     const text = await resp.text();
 
     if (resp.ok) {
-      setStatus("Submitted ✅", "success");
-      setMessage("Submitted ✅", "success");
-      // reload last reading + reset override
+      setStatus("Submitted ✅");
+      showMessage("Submitted ✅", "success");
       document.getElementById("overrideLower").checked = false;
       await loadLastReading();
     } else {
-      setStatus("Submit failed.", "error");
-      setMessage(text || "Submit failed.", "error");
+      setStatus("Submit failed.");
+      showMessage(text || "Submit failed.", "error");
     }
   });
 
-  // --- Start ---
+  // Start
   loadLastReading();
 </script>
 
