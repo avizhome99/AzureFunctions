@@ -80,203 +80,110 @@
 </form>
 
 <script>
-  // ========= CONFIG (UPDATE THESE) =========
-  // 1) New function you create: GetLatestReading
-  const GET_LATEST_URL = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api/GetLatestReading";
-  // 2) Your existing submit function
-  const SUBMIT_URL      = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api/SubmitReading";
-  // ========================================
+  const API_BASE = "https://bore-reading-api-avi-fabag6gva8hgggh8.australiaeast-01.azurewebsites.net/api";
 
   const params = new URLSearchParams(window.location.search);
-  const meter = params.get("meter");
+  const meter = params.get("meter") || "";
 
-  const meterEl   = document.getElementById("meter");
-  const meterDisp = document.getElementById("meterDisplay");
-  const lastDisp  = document.getElementById("lastDisplay");
-  const statusEl  = document.getElementById("status");
-  const msgEl     = document.getElementById("message");
-  const submitBtn = document.getElementById("submitBtn");
+  // store last reading globally so "Use last" works
+  let lastReading5 = null;
 
-  function setStatus(text) {
-    statusEl.textContent = text || "";
-  }
-
-  function setMessage(text, isOk) {
-    msgEl.className = isOk ? "success" : "error";
-    msgEl.textContent = text || "";
-  }
-
-  function pad5(nStr) {
-    const s = String(nStr ?? "").replace(/\D/g, "");
-    return s.padStart(5, "0").slice(-5);
-  }
-
-  function buildDigitOptions(selectEl) {
-    selectEl.innerHTML = "";
-    for (let i = 0; i <= 9; i++) {
-      const opt = document.createElement("option");
-      opt.value = String(i);
-      opt.textContent = String(i);
-      selectEl.appendChild(opt);
+  function setWheelFrom5Digits(five) {
+    const s = (five || "").toString().padStart(5, "0").slice(0, 5);
+    for (let i = 0; i < 5; i++) {
+      const el = document.getElementById(`d${i}`);
+      if (el) el.value = s[i];
     }
   }
 
-  const selects = ["d1","d2","d3","d4","d5"].map(id => document.getElementById(id));
-  selects.forEach(buildDigitOptions);
-
-  function setWheelsFromReading(reading5) {
-    const r = pad5(reading5);
-    selects[0].value = r[0];
-    selects[1].value = r[1];
-    selects[2].value = r[2];
-    selects[3].value = r[3];
-    selects[4].value = r[4];
-    document.getElementById("readingText").value = r;
+  function getWheelAs5Digits() {
+    let s = "";
+    for (let i = 0; i < 5; i++) {
+      const el = document.getElementById(`d${i}`);
+      s += (el ? el.value : "0");
+    }
+    return s.padStart(5, "0").slice(0, 5);
   }
 
-  function getReadingFromWheels() {
-    const r = selects.map(s => s.value).join("");
-    document.getElementById("readingText").value = r;
-    return r;
-  }
+  function renderMeterBox({ ok, last }) {
+    const box = document.getElementById("meterBox");
+    if (!box) return;
 
-  function adjustReading(delta) {
-    const current = parseInt(getReadingFromWheels(), 10);
-    if (Number.isNaN(current)) return;
-    const next = Math.max(0, Math.min(99999, current + delta));
-    setWheelsFromReading(String(next).padStart(5,"0"));
-  }
-
-  // Keep hidden input synced
-  selects.forEach(s => s.addEventListener("change", () => getReadingFromWheels()));
-
-  document.getElementById("btnMinus1").addEventListener("click", () => adjustReading(-1));
-  document.getElementById("btnPlus1").addEventListener("click", () => adjustReading(1));
-  document.getElementById("btnPlus10").addEventListener("click", () => adjustReading(10));
-
-  let lastReading = null;
-  let lastReadingDate = null;
-
-  document.getElementById("btnUseLast").addEventListener("click", () => {
-    if (lastReading != null) setWheelsFromReading(lastReading);
-  });
-
-  async function loadLatest() {
     if (!meter) {
-      meterDisp.textContent = "Invalid QR link (missing ?meter=...)";
-      setStatus("");
-      submitBtn.disabled = true;
+      box.innerHTML = `<strong>Invalid QR link</strong>`;
       return;
     }
 
-    meterEl.value = meter;
-    meterDisp.textContent = "Meter: " + meter;
+    box.innerHTML = `
+      <div><strong>Meter:</strong> ${meter}</div>
+      <div><strong>Last:</strong> ${ok ? last : "Unavailable"}</div>
+    `;
+  }
 
-    setStatus("Loading last reading…");
-    setMessage("");
+  async function loadLastReading() {
+    if (!meter) {
+      renderMeterBox({ ok: false, last: "" });
+      return;
+    }
 
     try {
-      // GET /api/GetLatestReading?meter=xxxx
-      const url = GET_LATEST_URL + "?meter=" + encodeURIComponent(meter);
-      const resp = await fetch(url, { method: "GET" });
-
-      if (!resp.ok) {
-        const t = await resp.text();
-        setStatus("");
-        lastDisp.textContent = "Couldn’t load last reading (you can still submit).";
-        setWheelsFromReading("00000");
-        return;
-      }
+      const resp = await fetch(`${API_BASE}/GetLatestReading?meter=${encodeURIComponent(meter)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const data = await resp.json();
 
-      lastReading = pad5(data.lastReading ?? data.reading ?? "");
-      lastReadingDate = data.lastReadingDate ?? data.readingDate ?? "";
+      // IMPORTANT: use lastReading5 (not lastReadingRaw)
+      lastReading5 = data.lastReading5 || null;
 
-      lastDisp.textContent =
-        "Last: " + lastReading + (lastReadingDate ? (" (" + lastReadingDate + ")") : "");
+      renderMeterBox({ ok: !!lastReading5, last: lastReading5 || "-----" });
 
-      setWheelsFromReading(lastReading);
-      setStatus("");
+      // Optional: auto-set wheel to last reading
+      if (lastReading5) setWheelFrom5Digits(lastReading5);
 
     } catch (e) {
-      setStatus("");
-      lastDisp.textContent = "Couldn’t load last reading (you can still submit).";
-      setWheelsFromReading("00000");
+      console.error("Failed to load last reading:", e);
+      lastReading5 = null;
+      renderMeterBox({ ok: false, last: "" });
     }
   }
 
-  async function fileToBase64(file) {
-    const reader = new FileReader();
-    return await new Promise((resolve, reject) => {
-      reader.onload = () => {
-        const result = reader.result || "";
-        const base64 = String(result).split(",")[1] || "";
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  document.getElementById("form").addEventListener("submit", async function(e) {
-    e.preventDefault();
-
-    setMessage("");
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Submitting…";
-
-    try {
-      const reading = getReadingFromWheels(); // always 5 digits
-      const notes = document.getElementById("notes").value || "";
-      const file = document.getElementById("photo").files[0];
-
-      let photo = null;
-      if (file) photo = await fileToBase64(file);
-
-      // Optional: warn if reading decreased
-      if (lastReading != null) {
-        const cur = parseInt(reading, 10);
-        const prev = parseInt(lastReading, 10);
-        if (!Number.isNaN(cur) && !Number.isNaN(prev) && cur < prev) {
-          const ok = confirm(`This reading (${reading}) is LOWER than the last (${lastReading}). Submit anyway?`);
-          if (!ok) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Submit";
-            return;
-          }
-        }
-      }
-
-      const payload = { meter, reading, notes, photo };
-
-      const resp = await fetch(SUBMIT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (resp.ok) {
-        setMessage("Submitted successfully ✅", true);
-        // update "last" on screen to what was just submitted
-        lastReading = reading;
-        lastDisp.textContent = "Last: " + lastReading + " (just submitted)";
-        document.getElementById("notes").value = "";
-        document.getElementById("photo").value = "";
-      } else {
-        const t = await resp.text();
-        setMessage(t || "Submit failed", false);
-      }
-
-    } catch (err) {
-      setMessage(err?.message || String(err) || "Submit failed", false);
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Submit";
-    }
+  // Hook up Use Last button
+  document.getElementById("useLastBtn")?.addEventListener("click", () => {
+    if (lastReading5) setWheelFrom5Digits(lastReading5);
   });
 
-  loadLatest();
+  // Call on page load
+  loadLastReading();
+
+  // When you submit, use the wheel digits as your reading
+  document.getElementById("form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const reading = getWheelAs5Digits();
+    const notes = document.getElementById("notes")?.value || "";
+    const file = document.getElementById("photo")?.files?.[0];
+
+    let photo = null;
+    if (file) {
+      const reader = new FileReader();
+      photo = await new Promise((resolve) => {
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    const resp = await fetch(`${API_BASE}/SubmitReading`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meter, reading, notes, photo })
+    });
+
+    const text = await resp.text();
+    document.getElementById("message").innerText = resp.ok ? "Submitted ✅" : text;
+
+    // refresh last reading after submit
+    if (resp.ok) await loadLastReading();
+  });
 </script>
 
 </body>
